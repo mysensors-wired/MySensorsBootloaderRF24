@@ -159,6 +159,7 @@ static void MySensorsBootloader(void) {
 			eeprom_read_block(&_eepromNodeConfig, (uint8_t*)EEPROM_NODE_ID_ADDRESS, sizeof(nodeConfig_t));
 			// Read firmware config from EEPROM, i.e. type, version, CRC, blocks
 			eeprom_read_block(&_eepromNodeFirmwareConfig, (uint8_t*)EEPROM_FIRMWARE_TYPE_ADDRESS, sizeof(nodeFirmwareConfig_t));
+			_eepromNodeConfig.nodeId = 14; // ganz böse 
 			// initialize radio
 			if(initRadio()) {
 				BL_STATE = BL_FIND_PARENTS;
@@ -179,7 +180,7 @@ static void MySensorsBootloader(void) {
 			// prepare for I_FIND_PARENTS
 			 _setMessageDestination(BROADCAST_ADDRESS);
 			 // here we deal with ChinRF24 clones and inverted NO_ACK bit error: do not use the NO_ACK feature, but limit number of retries to 3
-			 _writeRegister(SETUP_RETR, 5 << ARD | 3 << ARC);
+			 //_writeRegister(SETUP_RETR, 5 << ARD | 3 << ARC);  
 			 _buildMessage(C_INTERNAL,I_FIND_PARENT_REQUEST, P_BYTE, 1);
 			// wait until I_FIND_CONFIGURED_PARENT_RESPONSE_PSEUDO_COMMAND command received => does not exist as real command,
 			// therefore process incoming messages until timeout or (configured) parent found
@@ -188,7 +189,7 @@ static void MySensorsBootloader(void) {
 			// from now on, all messages directed to GW
 			_setMessageDestination(GATEWAY_ADDRESS);
 			// auto retransmit delay 1500us, auto retransmit count 15
-			_writeRegister(SETUP_RETR, 5 << ARD | 15 << ARC);
+			//_writeRegister(SETUP_RETR, 5 << ARD | 15 << ARC);
 			if ( _eepromNodeConfig.parentNodeId!=AUTO ) {
 				BL_STATE = BL_CHECK_ID;
 			}

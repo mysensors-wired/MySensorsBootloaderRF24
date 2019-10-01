@@ -71,7 +71,7 @@
 // LED settings ********************************************************************************************************
 #define LED_DDR     DDRB
 #define LED_PORT    PORTB
-#define LED_PIN		PINB5 //NRFDuino uses PIN 9 (PB1)
+#define LED_PIN		PINB2 //NRFDuino uses PIN 9 (PB1)
 
 // DEBUG settings ******************************************************************************************************
 //#define DEBUG
@@ -92,6 +92,7 @@ int main(void) {
 	MCUSR = 0;
 	// enable watchdog	
 	watchdogConfig(WDT_TIMEOUT);
+	initUART();
 	#ifdef DEBUG
 		DEBUG_DDR = 0xFF;
 		DEBUG_PORT = DEBUG_INIT;
@@ -99,9 +100,9 @@ int main(void) {
 	// signal startup
 	blinkLed();
 	// STK500_bootloader runs only if reset reason was EXTERNAL RESET/POWER ON
-	if (_save_MCUSR & _BV(EXTRF) ) {
-		STK500Bootloader();
-	}
+//	if (_save_MCUSR & _BV(EXTRF) ) {
+//		STK500Bootloader();
+//	}
 	MySensorsBootloader();
 }
 

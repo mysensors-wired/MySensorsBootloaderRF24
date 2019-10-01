@@ -35,6 +35,32 @@ endif
 CFLAGS = -funsigned-char -funsigned-bitfields -DF_CPU=$(CLK) -DBAUD_RATE=$(BAUDRATE) -Os -ffunction-sections -fdata-sections -fpack-struct -fshort-enums -mrelax -Wall -Wextra -Wundef -pedantic -mmcu=$(MCU) -c -std=gnu99 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)" 
 LDFLAGS = -nostartfiles -Wl,-s -Wl,-static -Wl,-Map="$(OutputFileName).map" -Wl,--start-group -Wl,--end-group -Wl,--gc-sections -mrelax -Wl,-section-start=.text=0x7800 -mmcu=$(MCU)  
 
+IST:
+
+avr-gcc -o .pio\build\optiboot-328_RSnode\src\MYSBootloader.c.o -c -std=gnu99 -funsigned-bitfields -Os -fpack-struct -fshort-enums -mrelax -Wall -Wextra -Wundef -pedantic -mmcu=atmega328p -c -MD -MP -mrelax -Os -Wall -ffunction-sections -fdata-sections -mmcu=atmega328p -DBAUD_RATE=9600 -DF_CPU=8000000L -I. -IC:\users\lennart\.platformio\packages\framework-arduinoavr\cores\MiniCore -IC:\users\lennart\.platformio\packages\framework-arduinoavr\variants\minicore_standard MYSBootloader.c
+
+MYSBootloader.c:  avr-gcc 
+build_flags =
+-funsigned-char 
+-funsigned-bitfields 
+-DBAUD_RATE=9600
+-Os 
+-ffunction-sections 
+-fdata-sections 
+-fpack-struct 
+-fshort-enums 
+-mrelax 
+-Wall 
+-Wextra 
+-Wundef 
+-pedantic 
+-mmcu=atmega328p
+-c 
+-std=gnu99 
+-MD 
+-MP
+-MF "$(@:%.o=%.d)" 
+-MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)" 
 
 all: clean out
 
