@@ -21,7 +21,7 @@
 #define MyMessage_h
 
 #define PROTOCOL_VERSION	(2u)	//!< The version of the protocol
-#define MAX_MESSAGE_LENGTH	(32u)	//!< The maximum size of a message (including header)
+#define MAX_MESSAGE_LENGTH	(32)	//!< The maximum size of a message (including header)
 #define HEADER_SIZE			(7u)	//!< The size of the header
 #define MAX_PAYLOAD (MAX_MESSAGE_LENGTH - HEADER_SIZE) //!< The maximum size of a payload depends on #MAX_MESSAGE_LENGTH and #HEADER_SIZE
 

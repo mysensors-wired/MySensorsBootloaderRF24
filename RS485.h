@@ -52,12 +52,14 @@
 
 // Serial Transport
 #include <util/delay.h>
-#include <avr/io.h> 
+#include <avr/io.h>
 #define BAUD 9600
 #include <util/setbaud.h>
 
 #if defined(MY_RS485_DE_PIN)
-#define assertDE() hwDigitalWrite(MY_RS485_DE_PIN, HIGH); _delay_us(5)
+#define assertDE()                         \
+	hwDigitalWrite(MY_RS485_DE_PIN, HIGH); \
+	_delay_us(5)
 #define deassertDE() hwDigitalWrite(MY_RS485_DE_PIN, LOW)
 
 #else
@@ -66,10 +68,10 @@
 #endif
 
 // We only use SYS_PACK in this application
-#define	ICSC_SYS_PACK	0x58
+#define ICSC_SYS_PACK 0x58
 
-#define 	MY_RS485_SOH_COUNT   (3)
-#define MY_RS485_MAX_MESSAGE_LENGTH 16
+#define MY_RS485_SOH_COUNT (3)
+#define MY_RS485_MAX_MESSAGE_LENGTH MAX_MESSAGE_LENGTH
 #define BROADCAST_ADDRESS 255
 
 extern nodeConfig_t _eepromNodeConfig;
@@ -77,7 +79,7 @@ extern nodeConfig_t _eepromNodeConfig;
 #define _dataAvailable() transportDataAvailable()
 
 // Receiving header information
-char _header[6];
+char _header[HEADER_SIZE];
 
 // Reception state machine control and storage variables
 unsigned char _recPhase;
@@ -99,7 +101,6 @@ bool _packet_received;
 #define STX 2
 #define ETX 3
 #define EOT 4
-
 
 #define uart_putc(x) putch(x)
 #define uart_getc getch
@@ -125,56 +126,59 @@ void _serialReset()
 bool _serialProcess()
 {
 	unsigned char i;
-	if (!(UCSR0A & (1<<RXC0))) {
+	if (!(UCSR0A & (1 << RXC0)))
+	{
 		return false;
 	}
-
-	while((UCSR0A & (1<<RXC0))) {
+	while ((UCSR0A & (1 << RXC0)))
+	{
 		char inch;
 		inch = uart_getc();
-
-		switch(_recPhase) {
-
+		switch (_recPhase)
+		{
 		// Case 0 looks for the header.  Bytes arrive in the serial interface and get
 		// shifted through a header buffer.  When the start and end characters in
 		// the buffer match the SOH/STX pair, and the destination station ID matches
 		// our ID, save the header information and progress to the next state.
 		case 0:
-			memcpy(&_header[0],&_header[1],5);
+			memcpy(&_header[0], &_header[1], 5);
 			_header[5] = inch;
-			if ((_header[0] == SOH) && (_header[5] == STX) && (_header[1] != _header[2])) {
+			if ((_header[0] == SOH) && (_header[5] == STX) && (_header[1] != _header[2]))
+			{
 				_recCalcCS = 0;
 				_recStation = _header[1];
 				_recSender = _header[2];
 				_recCommand = _header[3];
 				_recLen = _header[4];
 
-				for (i=1; i<=4; i++) {
+				for (i = 1; i <= 4; i++)
+				{
 					_recCalcCS += _header[i];
 				}
 				_recPhase = 1;
 				_recPos = 0;
 
 				//Avoid _data[] overflow
-				if (_recLen >= MY_RS485_MAX_MESSAGE_LENGTH) {
+				if (_recLen >= MY_RS485_MAX_MESSAGE_LENGTH)
+				{
 					_serialReset();
 					break;
 				}
-
 				//Check if we should process this message
 				//We reject the message if we are the sender
 				//We reject if we are not the receiver and message is not a broadcast
 				if ((_recSender == _eepromNodeConfig.nodeId) ||
-				        (_recStation != _eepromNodeConfig.nodeId &&
-				         _recStation != BROADCAST_ADDRESS)) {
+					(_recStation != _eepromNodeConfig.nodeId &&
+					 _recStation != BROADCAST_ADDRESS))
+				{
 					_serialReset();
 					break;
 				}
 
-				if (_recLen == 0) {
+				if (_recLen == 0)
+				{
 					_recPhase = 2;
 				}
-
 			}
 			break;
 
@@ -183,7 +187,8 @@ bool _serialProcess()
 		case 1:
 			_data[_recPos++] = inch;
 			_recCalcCS += inch;
-			if (_recPos == _recLen) {
+			if (_recPos == _recLen)
+			{
 				_recPhase = 2;
 			}
 			break;
@@ -192,9 +197,12 @@ bool _serialProcess()
 		// reset the state machine to default and start looking for a new header.
 		case 2:
 			// Packet properly terminated?
-			if (inch == ETX) {
+			if (inch == ETX)
+			{
 				_recPhase = 3;
-			} else {
+			}
+			else
+			{
 				_serialReset();
 			}
 			break;
@@ -210,14 +218,17 @@ bool _serialProcess()
 		// If that test passes, then look for a valid command callback to execute.
 		// Execute it if found.
 		case 4:
-			if (inch == EOT) {
-				if (_recCS == _recCalcCS) {
+			if (inch == EOT)
+			{
+				if (_recCS == _recCalcCS)
+				{
 					// First, check for system level commands.  It is possible
 					// to register your own callback as well for system level
 					// commands which will be called after the system default
 					// hook.
 
-					switch (_recCommand) {
+					switch (_recCommand)
+					{
 					case ICSC_SYS_PACK:
 						_packet_from = _recSender;
 						_packet_len = _recLen;
@@ -236,10 +247,10 @@ bool _serialProcess()
 	return true;
 }
 
-bool writeMessage(const uint8_t to, const void* data, const uint8_t len)
+bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
 {
 	//const char *datap = static_cast<char const *>(data);
-	char * datap = (char *) data;
+	char *datap = (char *)data;
 	unsigned char i;
 	unsigned char cs = 0;
 
@@ -249,16 +260,18 @@ bool writeMessage(const uint8_t to, const void* data, const uint8_t len)
 	// Let's start out by looking for a collision.  If there has been anything seen in
 	// the last millisecond, then wait for a random time and check again.
 
-	while (_serialProcess()) {
-	//	unsigned char del;
-	//	del = rand() % 20;
+	while (_serialProcess())
+	{
+		//	unsigned char del;
+		//	del = rand() % 20;
 		_delay_us(20);
-//		for (i = 0; i < del; i++) {
-//			_delay_us(1);
-//			_serialProcess();
-//		}
+		//		for (i = 0; i < del; i++) {
+		//			_delay_us(1);
+		//			_serialProcess();
+		//		}
 		timeout--;
-		if (timeout == 0) {
+		if (timeout == 0)
+		{
 			// Failed to transmit!!!
 			return false;
 		}
@@ -270,53 +283,37 @@ bool writeMessage(const uint8_t to, const void* data, const uint8_t len)
 #endif
 
 	// Start of header by writing multiple SOH
-	for(unsigned char w=0; w<MY_RS485_SOH_COUNT; w++) {
+	for (unsigned char w = 0; w < MY_RS485_SOH_COUNT; w++)
+	{
 		uart_putc(SOH);
 	}
-	uart_putc(to);  // Destination address
+	uart_putc(to); // Destination address
 	cs += to;
 	uart_putc(_eepromNodeConfig.nodeId); // Source address
 	cs += _eepromNodeConfig.nodeId;
-	uart_putc(ICSC_SYS_PACK);  // Command code
+	uart_putc(ICSC_SYS_PACK); // Command code
 	cs += ICSC_SYS_PACK;
-	uart_putc(len);      // Length of text
+	uart_putc(len); // Length of text
 	cs += len;
-	uart_putc(STX);      // Start of text
-	for(i=0; i<len; i++) {
-		uart_putc(datap[i]);      // Text bytes
+	uart_putc(STX); // Start of text
+	for (i = 0; i < len; i++)
+	{
+		uart_putc(datap[i]); // Text bytes
 		cs += datap[i];
 	}
-	uart_putc(ETX);      // End of text
+	uart_putc(ETX); // End of text
 	uart_putc(cs);
 	uart_putc(EOT);
 
 #if defined(MY_RS485_DE_PIN)
 	hwDigitalWrite(MY_RS485_DE_PIN, LOW);
 #endif
+	//_serialReset();	//suppress echo
 	return true;
 }
 
-
-
 bool initRadio(void)
 {
-//	
-//   UBRR0H = UBRRH_VALUE;
-//   UBRR0L = UBRRL_VALUE;
-//   /* evtl. verkuerzt falls Register aufeinanderfolgen (vgl. Datenblatt)
-//      UBRR = UBRR_VALUE;
-//   */
-//#if USE_2X
-//   /* U2X-Modus erforderlich */
-//   UCSRA |= (1 << U2X0);
-//#else
-//   /* U2X-Modus nicht erforderlich */
-//   UCSR0A &= ~(1 << U2X0);
-//#endif
-//	UCSR0C = _BV(UCSZ01) | _BV(UCSZ00); /* 8-bit data */
-//    UCSR0B = _BV(RXEN0) | _BV(TXEN0);   /* Enable RX and TX */
-//
-// Reset the state machine
 	_serialReset();
 #if defined(MY_RS485_DE_PIN)
 	hwPinMode(MY_RS485_DE_PIN, OUTPUT);
@@ -325,16 +322,15 @@ bool initRadio(void)
 	return true;
 }
 
-
 bool transportDataAvailable(void)
 {
 	_serialProcess();
 	return _packet_received;
 }
 
-uint8_t readMessage(void* data)
-{	
-	memcpy(data,_data,_packet_len);
+uint8_t readMessage(void *data)
+{
+	memcpy(data, _data, _packet_len);
+	_packet_received = false;
 	return _packet_len;
 }
-

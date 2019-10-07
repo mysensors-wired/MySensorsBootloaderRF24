@@ -146,7 +146,11 @@ static void MySensorsBootloader(void) {
 	requestFirmwareBlock_t *firmwareRequest = (requestFirmwareBlock_t *)_outMsg.payload.data;
 	responseFirmwareBlock_t *firmwareResponse = (responseFirmwareBlock_t *)_inMsg.payload.data;
 	SM_BL_STATE BL_STATE = BL_READ_CONFIG;		// initial state
+	#ifndef MYRADIORS485
 	initSPI();
+	#else
+	initUART();
+	#endif
 	// main loop
 	while(1) {
 		// states
@@ -159,7 +163,6 @@ static void MySensorsBootloader(void) {
 			eeprom_read_block(&_eepromNodeConfig, (uint8_t*)EEPROM_NODE_ID_ADDRESS, sizeof(nodeConfig_t));
 			// Read firmware config from EEPROM, i.e. type, version, CRC, blocks
 			eeprom_read_block(&_eepromNodeFirmwareConfig, (uint8_t*)EEPROM_FIRMWARE_TYPE_ADDRESS, sizeof(nodeFirmwareConfig_t));
-			_eepromNodeConfig.nodeId = 14; // ganz böse 
 			// initialize radio
 			if(initRadio()) {
 				BL_STATE = BL_FIND_PARENTS;
@@ -344,7 +347,9 @@ static void MySensorsBootloader(void) {
 				#ifdef DEBUG
 					DEBUG_PORT = DEBUG_RUN;
 				#endif
-				SPIclose();				
+				#ifndef MYRADIORS485
+				SPIclose();	
+				#endif			
 				// watchdog settings
 				#ifdef WATCHDOG_ON_SKETCH_START
 					watchdogReset();

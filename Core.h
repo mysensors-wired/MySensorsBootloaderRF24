@@ -17,6 +17,8 @@
 #define BOOTLOADER_SIZE	(2048)
 #define BOOTLOADER_START_ADDRESS (0x8000 - BOOTLOADER_SIZE)
 
+// radio settings ******************************************************************************************************
+#define MYRADIORS485
 // DEBUG led patterns  *************************************************************************************************
 
 #define DEBUG_INIT				_BV(3)
@@ -40,8 +42,11 @@
 #include "HW.h"
 #include "MyEepromAddresses.h"
 #include "MyMessage.h"
-//#include "RF24.h"
+#ifdef MYRADIORS485
 #include "RS485.h"
+#else
+#include "RF24.h"
+#endif
 #include "STK500Bootloader.h"
 #include "MySensorsBootloader.h"
 

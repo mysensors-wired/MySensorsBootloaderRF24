@@ -260,9 +260,33 @@ static void blinkLed(void) {
 	//300ms total
 	for (uint8_t i = 0; i < 6; i++) {
 		LED_PORT ^= _BV(LED_PIN);
-		_delay_ms(50);		
+		_delay_ms(100);		
 	}
 }
 
+static void initSoftUart(){
+	SOFT_UART_DDR |= _BV(SOFT_UART_PIN);
+	SOFT_UART_PORT |= _BV(SOFT_UART_PIN);
+}
+static void softUartPutC(const uint8_t out){
+	uint8_t mask = 0x01;
+	SOFT_UART_PORT &= ~_BV(SOFT_UART_PIN);
+	_delay_us(104);
+	for(uint8_t i=0; i < 8 ; i++){
+		if (mask & out)
+			SOFT_UART_PORT |= _BV(SOFT_UART_PIN);
+		else
+			SOFT_UART_PORT &= ~_BV(SOFT_UART_PIN);
+		mask = mask << 1;
+		_delay_us(104); 
+	}
+	SOFT_UART_PORT |= _BV(SOFT_UART_PIN);
+	_delay_us(208); 
+}
+
+static void softUartPut16(const uint16_t out){
+	softUartPutC((uint8_t*) ((0xFF00 & out) >> 8));
+	softUartPutC((uint8_t*) ((0x00FF & out)));
+}
 
 #endif // HW_H

@@ -78,6 +78,11 @@
 #define DEBUG_PORT	PORTD
 #define DEBUG_DDR	DDRD
 
+// Soft UART settings **************************************************************************************************
+#define SOFT_UART_DDR	DDRB
+#define SOFT_UART_PORT	PORTB
+#define SOFT_UART_PIN	PINB0	
+
 #include "Core.h"
 
 // prototype
@@ -92,7 +97,10 @@ int main(void) {
 	MCUSR = 0;
 	// enable watchdog	
 	watchdogConfig(WDT_TIMEOUT);
-	initUART();
+//	initSoftUart();
+//
+//	softUartPut16(0xCAFF);
+//	softUartPutC(0xEE);
 	#ifdef DEBUG
 		DEBUG_DDR = 0xFF;
 		DEBUG_PORT = DEBUG_INIT;
@@ -100,9 +108,9 @@ int main(void) {
 	// signal startup
 	blinkLed();
 	// STK500_bootloader runs only if reset reason was EXTERNAL RESET/POWER ON
-//	if (_save_MCUSR & _BV(EXTRF) ) {
-//		STK500Bootloader();
-//	}
+	//if (_save_MCUSR & _BV(EXTRF) ) {
+	//	STK500Bootloader();
+	//}
 	MySensorsBootloader();
 }
 
