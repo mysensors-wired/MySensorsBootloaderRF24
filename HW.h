@@ -133,7 +133,7 @@ static void watchdogConfig(const uint8_t wdtConfig) {
 #define CE_LOW()	CE_PORT &= ~_BV(CE_PIN)
 #define CE_HIGH()	CE_PORT |= _BV(CE_PIN)
 
-
+#ifndef MYRADIORS485
 static void initSPI(void) {
 	// Initialize the SPI pins: SCK, MOSI, CE, CSN as outputs, MISO as input
 	#if defined(SPI_PINS_CE9_CSN10)
@@ -193,7 +193,7 @@ static inline void SPIclose(void) {
 	// disable hardware SPI
 	SPCR = 0;	
 }
-
+#endif
 
 // UART
 static void initUART(void) {
@@ -260,33 +260,8 @@ static void blinkLed(void) {
 	//300ms total
 	for (uint8_t i = 0; i < 6; i++) {
 		LED_PORT ^= _BV(LED_PIN);
-		_delay_ms(100);		
+		_delay_ms(50);		
 	}
-}
-
-static void initSoftUart(){
-	SOFT_UART_DDR |= _BV(SOFT_UART_PIN);
-	SOFT_UART_PORT |= _BV(SOFT_UART_PIN);
-}
-static void softUartPutC(const uint8_t out){
-	uint8_t mask = 0x01;
-	SOFT_UART_PORT &= ~_BV(SOFT_UART_PIN);
-	_delay_us(104);
-	for(uint8_t i=0; i < 8 ; i++){
-		if (mask & out)
-			SOFT_UART_PORT |= _BV(SOFT_UART_PIN);
-		else
-			SOFT_UART_PORT &= ~_BV(SOFT_UART_PIN);
-		mask = mask << 1;
-		_delay_us(104); 
-	}
-	SOFT_UART_PORT |= _BV(SOFT_UART_PIN);
-	_delay_us(208); 
-}
-
-static void softUartPut16(const uint16_t out){
-	softUartPutC((uint8_t*) ((0xFF00 & out) >> 8));
-	softUartPutC((uint8_t*) ((0x00FF & out)));
 }
 
 #endif // HW_H

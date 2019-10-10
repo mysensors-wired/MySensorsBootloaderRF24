@@ -78,11 +78,6 @@
 #define DEBUG_PORT	PORTD
 #define DEBUG_DDR	DDRD
 
-// Soft UART settings **************************************************************************************************
-#define SOFT_UART_DDR	DDRB
-#define SOFT_UART_PORT	PORTB
-#define SOFT_UART_PIN	PINB0	
-
 #include "Core.h"
 
 // prototype

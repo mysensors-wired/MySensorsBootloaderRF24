@@ -48,7 +48,8 @@
  * either expressed or implied, of Majenko Technologies.
  ********************************************************************************/
 
-// transport(Serial,0,-1); // serial port, node, dePin (-1 disabled)
+#ifndef RS485_H
+#define RS485_H
 
 // Serial Transport
 #include <util/delay.h>
@@ -334,3 +335,4 @@ uint8_t readMessage(void *data)
 	_packet_received = false;
 	return _packet_len;
 }
+#endif //RS485_H

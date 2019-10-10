@@ -46,9 +46,10 @@
 #include "RS485.h"
 #else
 #include "RF24.h"
-#endif
 #include "STK500Bootloader.h"
+#endif
 #include "MySensorsBootloader.h"
+
 
 
 // global variables

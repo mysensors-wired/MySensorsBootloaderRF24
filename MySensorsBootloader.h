@@ -21,7 +21,9 @@ extern uint8_t _save_MCUSR;
 #define AUTO				(0xFFu)
 #define NODE_SENSOR_ID		(0xFFu)
 #define DISTANCE_INVALID	(0xFFu)
+#ifndef BROADCAST_ADDRESS
 #define BROADCAST_ADDRESS	(0xFFu)
+#endif
 #define GATEWAY_ADDRESS		(0x00u)
 #define DEBUG_NODE_ID		(0xFEu)
 
