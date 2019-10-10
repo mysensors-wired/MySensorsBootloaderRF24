@@ -97,10 +97,6 @@ int main(void) {
 	MCUSR = 0;
 	// enable watchdog	
 	watchdogConfig(WDT_TIMEOUT);
-//	initSoftUart();
-//
-//	softUartPut16(0xCAFF);
-//	softUartPutC(0xEE);
 	#ifdef DEBUG
 		DEBUG_DDR = 0xFF;
 		DEBUG_PORT = DEBUG_INIT;
@@ -108,9 +104,11 @@ int main(void) {
 	// signal startup
 	blinkLed();
 	// STK500_bootloader runs only if reset reason was EXTERNAL RESET/POWER ON
-	//if (_save_MCUSR & _BV(EXTRF) ) {
-	//	STK500Bootloader();
-	//}
+	#ifndef MYRADIORS485	//not enough space for stk500 bootloader
+	if (_save_MCUSR & _BV(EXTRF) ) {
+		STK500Bootloader();
+	}
+	#endif
 	MySensorsBootloader();
 }
 
