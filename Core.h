@@ -49,7 +49,7 @@
 #include "STK500Bootloader.h"
 #endif
 #include "MySensorsBootloader.h"
-#include "HardwareID.h"
+
 
 
 // global variables
