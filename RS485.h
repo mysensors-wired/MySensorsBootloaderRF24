@@ -54,14 +54,13 @@
 // Serial Transport
 #include <util/delay.h>
 #include <avr/io.h>
-#define BAUD 9600
 #include <util/setbaud.h>
 
 #if defined(MY_RS485_DE_PIN)
 #define assertDE()                         \
-	hwDigitalWrite(MY_RS485_DE_PIN, HIGH); \
+	hwDigitalWrite(MY_RS485_DE_PIN, LOW); \
 	_delay_us(5)
-#define deassertDE() hwDigitalWrite(MY_RS485_DE_PIN, LOW)
+#define deassertDE() hwDigitalWrite(MY_RS485_DE_PIN, HIGH)
 
 #else
 #define assertDE()
@@ -127,11 +126,11 @@ void _serialReset()
 bool _serialProcess()
 {
 	unsigned char i;
-	if (!(UCSR0A & (1 << RXC0)))
+	if (!(UCSR0A & (1 << RXC0))) // input buffer empty
 	{
 		return false;
 	}
-	while ((UCSR0A & (1 << RXC0)))
+	while ((UCSR0A & (1 << RXC0))) // input buffer not empty
 	{
 		char inch;
 		inch = uart_getc();
@@ -256,7 +255,7 @@ bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
 	unsigned char cs = 0;
 
 	// This is how many times to try and transmit before failing.
-	unsigned char timeout = 10;
+	unsigned char timeout = 50;
 
 	// Let's start out by looking for a collision.  If there has been anything seen in
 	// the last millisecond, then wait for a random time and check again.
@@ -265,12 +264,12 @@ bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
 	{
 		//	unsigned char del;
 		//	del = rand() % 20;
-		_delay_us(20);
+		_delay_us((1/ BAUD_RATE) * 10 * 5 * 1000 * 1000); // wait for ~ 5 bytes
 		//		for (i = 0; i < del; i++) {
 		//			_delay_us(1);
 		//			_serialProcess();
 		//		}
-		timeout--;
+		timeout--; 
 		if (timeout == 0)
 		{
 			// Failed to transmit!!!
@@ -279,7 +278,7 @@ bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
 	}
 
 #if defined(MY_RS485_DE_PIN)
-	hwDigitalWrite(MY_RS485_DE_PIN, HIGH);
+	MY_RS485_DE_PORT &= ~_BV(MY_RS485_DE_PIN);	//Enable Device
 	_delay_us(5);
 #endif
 
@@ -307,7 +306,9 @@ bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
 	uart_putc(EOT);
 
 #if defined(MY_RS485_DE_PIN)
-	hwDigitalWrite(MY_RS485_DE_PIN, LOW);
+	UCSR0A |= 1<<TXC0;  // clear flag!
+	while((UCSR0A & _BV(TXC0)) == 0); //wait for transission complete
+	//MY_RS485_DE_PORT |= _BV(MY_RS485_DE_PIN); //disable 
 #endif
 	//_serialReset();	//suppress echo
 	return true;
@@ -317,8 +318,8 @@ bool initRadio(void)
 {
 	_serialReset();
 #if defined(MY_RS485_DE_PIN)
-	hwPinMode(MY_RS485_DE_PIN, OUTPUT);
-	hwDigitalWrite(MY_RS485_DE_PIN, LOW);
+	MY_RS485_DE_DDR |= _BV(MY_RS485_DE_PIN); //Disable Device
+	MY_RS485_DE_PORT |= _BV(MY_RS485_DE_PIN); //Disable Device
 #endif
 	return true;
 }

@@ -19,6 +19,9 @@
 
 // radio settings ******************************************************************************************************
 #define MYRADIORS485
+#define MY_RS485_DE_PIN PIND3
+#define MY_RS485_DE_PORT PORTD
+#define MY_RS485_DE_DDR DDRD
 // DEBUG led patterns  *************************************************************************************************
 
 #define DEBUG_INIT				_BV(3)
