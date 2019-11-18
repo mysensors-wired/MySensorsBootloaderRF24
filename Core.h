@@ -22,6 +22,7 @@
 #define MY_RS485_DE_PIN PIND3
 #define MY_RS485_DE_PORT PORTD
 #define MY_RS485_DE_DDR DDRD
+#define MY_RS485_DE_INVERSE
 // DEBUG led patterns  *************************************************************************************************
 
 #define DEBUG_INIT				_BV(3)
