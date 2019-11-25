@@ -69,6 +69,9 @@
 #define deassertDE()
 #endif
 
+
+
+
 // We only use SYS_PACK in this application
 //#define MY_RS485_SOH_COUNT (1) // No need for wakeup calls
 #define MY_RS485_MAX_MESSAGE_LENGTH MAX_MESSAGE_LENGTH
@@ -102,8 +105,126 @@ bool _packet_received;
 #define ETX 3
 #define EOT 4
 
-#define uart_putc(x) putch(x)
+
+// CAN Transceiver related stuff
+// it is possible to use any digial I/O (or the USART)
+#define CAN_RX_PIN PD0  // standard UART port for atmega328
+#define CAN_TX_PIN PD1  // standard UART port for atmega328
+
+
+#if (F_CPU / BAUD_RATE) < 256   // check maybe required prescaling
+#warning "Using no prescaler for bit collision detection timer!"
+#define TCNT2_VAL_PER_BIT (F_CPU / BAUD_RATE )
+#else
+#if ((F_CPU / BAUD_RATE / 8) < 256 ) // 8x prescaling required
+#warning "Using x8 for bit collision detection timer!"
+ #define USE_PRESCALER_8X
+ #define TCNT2_VAL_PER_BIT (F_CPU / BAUD_RATE / 8)
+#endif
+#endif
+
+// double check if all conditions above have been analyzed
+#if !defined(TCNT2_VAL_PER_BIT)
+#error " TCNT2_VAL_PER_BIT is undefined! "
+#endif
+
+
+uint8_t canTcnt2ValBitStart;  // TCNT2 counter value at the beginning of a bit transaction
+typedef enum {
+  UART_START_VAL = 0,
+  UART_STOP_VAL = 1
+}uart_cmd_t;
+
+bool putBitReadback(bool b)
+{
+  // write bit value 
+  if (b)
+  { // 1 is the CAN recessive state
+    PORTD |= _BV(CAN_TX_PIN);
+  }
+  else
+  {
+    // 0 is CAN dominant state
+    PORTD &= ~_BV(CAN_TX_PIN);
+  }
+
+// delay to ensure the bus is driven correctly
+_delay_us(2);
+
+// wait until bit time has been set for 1/BAUD_RATE time
+   while ((uint8_t)(TCNT2 - canTcnt2ValBitStart) < TCNT2_VAL_PER_BIT)
+  {
+    // check the output while waiting. Do collisions occur?
+    uint8_t rxVal;
+    rxVal = (PIND & _BV(CAN_RX_PIN)) >> CAN_RX_PIN;
+    if (b != (bool)rxVal)
+      return false;   
+  }
+
+// increase start value for next bit to transfer
+   canTcnt2ValBitStart += TCNT2_VAL_PER_BIT;
+
+  return true;
+}
+
+
+
+bool putchReadback(uint8_t val)
+{
+	UART_SRB = 0; // disable USART interface
+
+// TODO: is this BS with extra CAN RX/TX defines?
+	DDRD &= ~_BV(CAN_RX_PIN); // configure RX as input
+  	DDRD |= _BV(CAN_TX_PIN);  // configure TX as output
+
+  canTcnt2ValBitStart = TCNT2; // set variable to determine next bit time window
+
+  // send Start Bit
+  if (!putBitReadback(UART_START_VAL))
+  {
+	  UART_SRB = _BV(RXEN0) | _BV(TXEN0);  // re-enable USART
+    return false;
+  }
+
+
+  // send payload
+  for (uint8_t i = 0; i < 8; ++i)
+  {
+    if (!putBitReadback((val & (1 << i)) >> i)) 
+      {
+			UART_SRB = _BV(RXEN0) | _BV(TXEN0);  // re-enable USART
+			return false;
+		}
+  }
+
+  // send Stop Bit
+  if (!putBitReadback(UART_STOP_VAL))
+  {
+	UART_SRB = _BV(RXEN0) | _BV(TXEN0);  // re-enable USART
+    return false;
+  }
+
+
+  UART_SRB = _BV(RXEN0) | _BV(TXEN0);   // re-enable USART
+  return true;
+}
+
+
+#ifdef RS485_COLLISION_DETECTION
+#define uart_putc(x) putchReadback(x)
+#else 
+
+inline bool uart_putc(const uint8_t ch){
+	putch(ch); 
+	return true;
+}
+#endif
+
+
 #define uart_getc getch
+
+
+
 
 //Reset the state machine and release the data pointer
 void _serialReset()
@@ -220,55 +341,119 @@ bool _serialProcess()
 	return true;
 }
 
-bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
+// TODO: store stuff into uint16_t to save space?
+bool writeRS485Packet(const void *data, const uint8_t len)
 {
-	//const char *datap = static_cast<char const *>(data);
-	char *datap = (char *)data;
-	unsigned char i;
 	unsigned char cs = 0;
+	char *datap = (char *)data;
 
-	// This is how many times to try and transmit before failing.
-	unsigned char timeout = 50;
+	// Start of header by writing SOH
+	if(!uart_putc(NEW_SOH))
+		return false;
 
-	// Let's start out by looking for a collision.  If there has been anything seen in
-	// the last millisecond, then wait for a random time and check again.
+	if(!uart_putc(len)) // Length of text
+		return false;
 
-	while (_serialProcess())
-	{
-		//	unsigned char del;
-		//	del = rand() % 20;
-		_delay_us((1/ BAUD_RATE) * 10 * 5 * 1000 * 1000); // wait for ~ 5 bytes
-		//		for (i = 0; i < del; i++) {
-		//			_delay_us(1);
-		//			_serialProcess();
-		//		}
-		timeout--; 
-		if (timeout == 0)
-		{
-			// Failed to transmit!!!
-			return false;
-		}
-	}
-
-	assertDE();
-
-	// Start of header by writing  SOH
-	uart_putc(NEW_SOH);
-	uart_putc(len); // Length of text
 	cs += len;
-	uart_putc(STX); // Start of text
-	for (i = 0; i < len; i++)
+	if(!uart_putc(STX)) //Start of text
+		return false;
+
+	for (uint8_t i = 0; i < len; i++)
 	{
-		uart_putc(datap[i]); // Text bytes
+		if(!uart_putc(datap[i])) // Text bytes
+			return false;
 		cs += datap[i];
 	}
-	uart_putc(ETX); // End of text
-	uart_putc(cs);
-	uart_putc(EOT);
-	UCSR0A |= 1<<TXC0;  // clear flag!
-	while((UCSR0A & _BV(TXC0)) == 0); //wait for transission complete
-	deassertDE();
+
+	if(!uart_putc(ETX)) // // End of text
+		return false;
+
+
+	if(!uart_putc(cs)) // checksum
+		return false;
+
+
+	if(!uart_putc(EOT)) // End of transfer
+		return false;
+
+
+// flush HW USART
+	#if !defined(RS485_COLLISION_DETECTION)
+		UCSR0A |= 1<<TXC0;  // clear flag!
+		while((UCSR0A & _BV(TXC0)) == 0); //wait for transission complete
+	#endif
+
 	return true;
+}
+
+
+
+#define RS485_SEND_MESSAGE_TRY_CNT 10
+#define RS485_BUS_AQUISITION_TRY_CNT 50
+#define RS485_TRANSMIT_TRY_CNT 50
+
+#define RS485_BIT_DURATION_US (1.f/ BAUD_RATE) *1000 *1000
+#define RS485_BUS_AQUISITION_WAIT_US 5* RS485_BIT_DURATION_US * 10   // ~ 5 Bytes * (Bit period * 10 Bit / transaction (start/stop+8bit)) 
+
+// example
+// RS485_BUS_AQUISITION_WAIT_US for BAUD 38400 = 1,3 ms
+// 10*50*50 * 1,3 ms = 32s
+
+// TODO Will the watchdog trigger before?
+
+bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
+{
+	(void) to;  // unused in RS485
+
+	LED_PORT |= _BV(LED_PIN); // enable LED
+
+// step 0) repeat for RS485_SEND_MESSAGE_TRY_CNT
+// step 1) Listen before talk: Wait RS485_BUS_AQUISITION_TRY_CNT times until bus showed no activity for a certain time (RS485_BUS_AQUISITION_WAIT_US)
+// step 2) Try to transmit message for RS485_TRANSMIT_TRY_CNT times
+
+uint8_t sendMessageCnt = RS485_TRANSMIT_TRY_CNT;
+
+	// step 0 repeat
+	while (sendMessageCnt > 0)
+	{
+		// step 1: wait until bus idle
+		uint8_t busAquisitionCnt = RS485_BUS_AQUISITION_TRY_CNT;
+
+		while (busAquisitionCnt > 0)
+		{
+			if (_serialProcess())
+			{
+				// bus activity detected ... wait and try again
+				_delay_us(RS485_BUS_AQUISITION_WAIT_US);
+			}
+			else {
+				// bus is idle
+				// try to send bitwise for RS485_TRANSMIT_TRY_CNT times
+				uint8_t transmitCnt = RS485_TRANSMIT_TRY_CNT;
+				while (transmitCnt > 0)
+				{
+					assertDE();
+					bool ret = writeRS485Packet(data, len);
+					deassertDE();
+					if ( ret )
+					{
+						// message has been successfully sent :)
+						
+						LED_PORT &= ~_BV(LED_PIN); // disable LED
+						return true;
+					}
+	
+					--transmitCnt;
+				} //  (transmitCnt > 0)
+			}
+
+			--busAquisitionCnt;
+		} // while (busAquisitionCnt > 0)
+
+		--sendMessageCnt;
+	} // while (sendMessageCnt > 0)
+
+	return false;
 }
 
 bool initRadio(void)
@@ -276,6 +461,19 @@ bool initRadio(void)
 	_serialReset();
 	MY_RS485_DE_DDR |= _BV(MY_RS485_DE_PIN);
 	deassertDE();
+
+	#ifdef RS485_COLLISION_DETECTION
+	// activate timer CNT2 to send bits in equidistant time slices
+	
+	PRR &= _BV(PRTIM2); // ensure that Timer2 is enabled in PRR (Power Reduction Register)
+
+	#ifdef USE_PRESCALER_8X
+	TCCR2B = _BV(CS21); // set clkTS2 with prescaling factor of /8
+	#else
+	TCCR2B = _BV(CS20); // set clkTS2 source to non prescaling
+	#endif
+#endif
+
 	return true;
 }
 
