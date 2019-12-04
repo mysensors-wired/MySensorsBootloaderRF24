@@ -5,9 +5,7 @@
 #ifndef HardwareID_H
 #define HardwareID_H
 
-#include "MySensorsBootloader.h"
-
-const uint8_t RS_NODE_BASEID =  0x01 << 5;
+static const uint8_t RS_NODE_BASEID =  0x01 << 5;
 
 int8_t readHardwareIDtoEEPROM(){
     uint8_t id = 0;
