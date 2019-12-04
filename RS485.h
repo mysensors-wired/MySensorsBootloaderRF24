@@ -88,9 +88,7 @@ char _header[RS485_HEADER_LENGTH];
 // Reception state machine control and storage variables
 unsigned char _recPhase;
 unsigned char _recPos;
-unsigned char _recLen;
-unsigned char _recStation;
-unsigned char _recSender;
+static unsigned char _recLen;
 unsigned char _recCS;
 unsigned char _recCalcCS;
 
