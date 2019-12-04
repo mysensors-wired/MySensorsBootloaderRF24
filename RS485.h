@@ -82,7 +82,7 @@ extern nodeConfig_t _eepromNodeConfig;
 #define _dataAvailable() transportDataAvailable()
 
 // Receiving header information
-#define RS485_HEADER_LENGTH  3
+#define RS485_HEADER_LENGTH  4
 char _header[RS485_HEADER_LENGTH];
 
 // Reception state machine control and storage variables
@@ -94,16 +94,18 @@ unsigned char _recSender;
 unsigned char _recCS;
 unsigned char _recCalcCS;
 
+unsigned char _nodeId;
+unsigned char _hasNodeId = false;
+
 char _data[MY_RS485_MAX_MESSAGE_LENGTH];
 uint8_t _packet_len;
 unsigned char _packet_from;
 bool _packet_received;
 
 // Packet wrapping characters, defined in standard ASCII table
-#define NEW_SOH 0x11
+#define SOH 1
 #define STX 2
-#define ETX 3
-#define EOT 4
+
 
 
 // CAN Transceiver related stuff
@@ -279,108 +281,93 @@ bool _serialProcess()
     {
         char inch;
         inch = uart_getc();
-        switch (_recPhase) {
-        // Case 0 looks for the header.  Bytes arrive in the serial interface and get
-        // shifted through a header buffer.  When the start and end characters in
-        // the buffer match the SOH/STX pair, and the destination station ID matches
-        // our ID, save the header information and progress to the next state.
-        case 0:
-            memcpy(&_header[0], &_header[1], RS485_HEADER_LENGTH-1);
-            _header[2] = inch;
-            if ((_header[0] == NEW_SOH) && (_header[2] == STX)) {
-                _recLen = _header[1];
-                _recCalcCS = 0;
-                _recCalcCS += _recLen;
-                _recPhase = 1;
-                _recPos = 0;
+        if (_packet_received == true){
+			return true;
+		}
+        switch(_recPhase) {
 
-                //Avoid _data[] overflow
-                if (_recLen >= MY_RS485_MAX_MESSAGE_LENGTH) {
-                    _serialReset();
-                    break;
-                }
+            // Case 0 looks for the header.  Bytes arrive in the serial interface and get
+            // shifted through a header buffer.  When the start and end characters in
+            // the buffer match the SOH/STX pair, and the destination station ID matches
+            // our ID, save the header information and progress to the next state.
+            case 0:
+                memcpy(&_header[0],&_header[1],RS485_HEADER_LENGTH-1);
+                _header[RS485_HEADER_LENGTH-1] = inch;
+                if ((_header[0] == SOH) && (_header[3] == STX)) {	
+                    _recCS = _header[1];
+                    _recLen = _header[2];
+                    _recCalcCS = _recLen;
+                    _recPhase = 1;
+                    _recPos = 0;
 
-                if (_recLen == 0) {
-                    _recPhase = 2;
-                }
-            }
-            break;
-
-        // Case 1 receives the data portion of the packet.  Read in "_recLen" number
-        // of bytes and store them in the _data array.
-        case 1:
-            _data[_recPos++] = inch;
-            _recCalcCS += inch;
-            if (_recPos == _recLen)
-            {
-                _recPhase = 2;
-            }
-            break;
-
-        // After the data comes a single ETX character.  Do we have it?  If not,
-        // reset the state machine to default and start looking for a new header.
-        case 2:
-            // Packet properly terminated?
-            if (inch == ETX)
-            {
-                _recPhase = 3;
-            }
-            else
-            {
-                _serialReset();
-            }
-            break;
-
-        // Next comes the checksum.  We have already calculated it from the incoming
-        // data, so just store the incoming checksum byte for later.
-        case 3:
-            _recCS = inch;
-            _recPhase = 4;
-            break;
-
-        // The final state - check the last character is EOT and that the checksum matches.
-        // If that test passes, then look for a valid command callback to execute.
-        // Execute it if found.
-        case 4:
-            if (inch == EOT)
-            {
-                if (_recCS == _recCalcCS)
-                {
-                    _packet_len = _recLen;
-                    //Check if we should process this message
-                    //We reject the message if we are the sender
-                    //Message not surpressed if node ID was not assigned to support auto id
-                    if ((_data[0] == _eepromNodeConfig.nodeId) && (_eepromNodeConfig.nodeId != 0xFF)) {
+                    //Avoid _data[] overflow
+                    if (_recLen >= MY_RS485_MAX_MESSAGE_LENGTH) {
                         _serialReset();
                         break;
                     }
+                    
+                    if (_recLen == 0) {
+                        _serialReset();
+                        //_recPhase = 2; // what now?
+                        break;
+                    }
+                }
+                break;
+
+            // Case 1 receives the data portion of the packet.  Read in "_recLen" number
+            // of bytes and store them in the _data array.
+            case 1:
+                _data[_recPos++] = inch;
+                _recCalcCS += inch;
+                if (_recPos == _recLen) {
+                    _recPhase = 2;
+                }
+                else{
+                    break;
+                }
+
+            case 2:
+                if (_recCS == _recCalcCS) {
+                    //Check if we should process this message
+                    //We reject the message if we are the sender
+                    //Message not surpressed if node ID was not assigned to support auto id
+                //	if ((_data[0] == _nodeId) && (_hasNodeId == true)) {
+                //		_serialReset();
+                //		break;
+                //	}
+                    _packet_len = _recLen;
                     _packet_received = true;
                 }
+                //Clear the data
+                _serialReset();
+                //Return true, we have processed one command
+                return true;
+                break;
             }
-            //Clear the data
-            _serialReset();
-            //Return true, we have processed one command
-            return true;
-            break;
         }
-    }
-    return true;
+	return true;
 }
 
 // TODO: store stuff into uint16_t to save space?
 bool writeRS485Packet(const void *data, const uint8_t len)
 {
-    unsigned char cs = 0;
+    unsigned char cs = len;
     char *datap = (char *)data;
 
+    for(uint8_t i=0; i<len; i++) {
+		cs += datap[i];
+	}
+
     // Start of header by writing SOH
-    if(!uart_putc(NEW_SOH))
+    if(!uart_putc(SOH))
+        return false;
+
+     if(!uart_putc(cs)) // checksum
         return false;
 
     if(!uart_putc(len)) // Length of text
         return false;
-
-    cs += len;
+    
     if(!uart_putc(STX)) //Start of text
         return false;
 
@@ -388,20 +375,7 @@ bool writeRS485Packet(const void *data, const uint8_t len)
     {
         if(!uart_putc(datap[i])) // Text bytes
             return false;
-        cs += datap[i];
     }
-
-    if(!uart_putc(ETX)) // // End of text
-        return false;
-
-
-    if(!uart_putc(cs)) // checksum
-        return false;
-
-
-    if(!uart_putc(EOT)) // End of transfer
-        return false;
-
 
 // flush HW USART
 #if !defined(RS485_COLLISION_DETECTION)
