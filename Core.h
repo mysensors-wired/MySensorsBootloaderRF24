@@ -18,11 +18,11 @@
 #define BOOTLOADER_START_ADDRESS (0x8000 - BOOTLOADER_SIZE)
 
 // radio settings ******************************************************************************************************
-#define MYRADIORS485
+#define MY_RADIO_RS485
 #define MY_RS485_DE_PIN PIND3
 #define MY_RS485_DE_PORT PORTD
 #define MY_RS485_DE_DDR DDRD
-#define MY_RS485_DE_INVERSE
+#define MY_RS485_DE_INVERSE  // TODO pass as compiler define  
 // DEBUG led patterns  *************************************************************************************************
 
 #define DEBUG_INIT				_BV(3)
@@ -46,7 +46,7 @@
 #include "HW.h"
 #include "MyEepromAddresses.h"
 #include "MyMessage.h"
-#ifdef MYRADIORS485
+#ifdef MY_RADIO_RS485
 #include "RS485.h"
 #else
 #include "RF24.h"
