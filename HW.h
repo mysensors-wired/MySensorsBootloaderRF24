@@ -133,7 +133,7 @@ static void watchdogConfig(const uint8_t wdtConfig) {
 #define CE_LOW()	CE_PORT &= ~_BV(CE_PIN)
 #define CE_HIGH()	CE_PORT |= _BV(CE_PIN)
 
-#ifndef MYRADIORS485
+#ifndef MY_RADIO_RS485
 static void initSPI(void) {
 	// Initialize the SPI pins: SCK, MOSI, CE, CSN as outputs, MISO as input
 	#if defined(SPI_PINS_CE9_CSN10)
