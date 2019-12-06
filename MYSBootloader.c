@@ -99,7 +99,9 @@ int main(void) {
 	// signal startup
 	blinkLed();
 	// STK500_bootloader runs only if reset reason was EXTERNAL RESET/POWER ON
-	#ifndef MYRADIORS485	//not enough space for stk500 bootloader
+#ifdef OCCLK_OVERRIDE
+    OSCCAL = OCCLK_OVERRIDE;
+#endif	#ifndef MY_RADIO_RS485	//not enough space for stk500 bootloader
 	if (_save_MCUSR & _BV(EXTRF) ) {
 		STK500Bootloader();
 	}

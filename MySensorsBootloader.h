@@ -148,7 +148,7 @@ static void MySensorsBootloader(void) {
 	requestFirmwareBlock_t *firmwareRequest = (requestFirmwareBlock_t *)_outMsg.payload.data;
 	responseFirmwareBlock_t *firmwareResponse = (responseFirmwareBlock_t *)_inMsg.payload.data;
 	SM_BL_STATE BL_STATE = BL_READ_CONFIG;		// initial state
-	#ifndef MYRADIORS485
+	#ifndef MY_RADIO_RS485
 	initSPI();
 	#else
 	initUART();
@@ -349,7 +349,7 @@ static void MySensorsBootloader(void) {
 				#ifdef DEBUG
 					DEBUG_PORT = DEBUG_RUN;
 				#endif
-				#ifndef MYRADIORS485
+				#ifndef MY_RADIO_RS485
 				SPIclose();	
 				#endif			
 				// watchdog settings
