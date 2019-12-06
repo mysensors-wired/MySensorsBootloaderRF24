@@ -98,11 +98,13 @@ int main(void) {
 	#endif
 	// signal startup
 	blinkLed();
-	readHardwareIDtoEEPROM();
-	// STK500_bootloader runs only if reset reason was EXTERNAL RESET/POWER ON
+
 #ifdef OCCLK_OVERRIDE
     OSCCAL = OCCLK_OVERRIDE;
-#endif	#ifndef MY_RADIO_RS485	//not enough space for stk500 bootloader
+#endif
+	readHardwareIDtoEEPROM();
+	// STK500_bootloader runs only if reset reason was EXTERNAL RESET/POWER ON
+	#ifndef MY_RADIO_RS485	//not enough space for stk500 bootloader
 	if (_save_MCUSR & _BV(EXTRF) ) {
 		STK500Bootloader();
 	}
