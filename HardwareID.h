@@ -5,7 +5,7 @@
 #ifndef HardwareID_H
 #define HardwareID_H
 
-static const uint8_t RS_NODE_BASE_ID =  0x01 << 5;
+#define RS_NODE_BASE_ID 0x01 << 5
 
 int8_t readHardwareIDtoEEPROM(){
     uint8_t id = 0;
