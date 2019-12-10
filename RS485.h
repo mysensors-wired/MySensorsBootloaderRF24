@@ -203,7 +203,16 @@ bool putchReadback(uint8_t val)
     DDRD |= _BV(CAN_TX_PIN);  // configure TX as output
 
 
-    canTcnt2ValBitStart = TCNT2; // set variable to determine next bit time window
+    // Start bit would be too long
+    // it will take some clock cycles until the start bit is actually written to the bus 
+    // anticipate this delay by subtracting some cnt values
+    #ifdef USE_PRESCALER_8X
+        #define START_BIT_ANTI_DELAY_VALUE 32/8
+    #else
+        #define START_BIT_ANTI_DELAY_VALUE 32
+    #endif 
+
+    canTcnt2ValBitStart = TCNT2 - START_BIT_ANTI_DELAY_VALUE; 
 
     // send Start Bit
     if (!putBitReadback(UART_START_VAL))
