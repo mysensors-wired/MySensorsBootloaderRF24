@@ -13,7 +13,7 @@ extern uint8_t _configuredParentID;
 extern uint8_t _save_MCUSR;
 
 #define TIMEOUT_MS			(2000)		// careful when changing
-#define MAX_FIRMWARE_REQUEST_RESEND	(3)
+#define MAX_FIRMWARE_REQUEST_RESEND	(255)
 
 #define SIGNING_PRESENTATION_VERSION_1	(1)
 #define SIGNING_PRESENTATION_VALUE		(0)	// no signing
