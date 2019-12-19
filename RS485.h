@@ -95,6 +95,7 @@ struct {
     bool _packet_received;
 } _inStateMachine ;
 
+uint8_t _pacLength;
 char _data[MY_RS485_MAX_MESSAGE_LENGTH];
 
 // Packet wrapping characters, defined in standard ASCII table
@@ -309,6 +310,7 @@ bool _serialProcess()
             case 2:
                 if (_inStateMachine._recCS == _inStateMachine._recCalcCS) {
                     _inStateMachine._packet_received = true;
+                    _pacLength = _inStateMachine._recLen;
                 }
                 goto _serialProcessEndWithPackError;
             }
@@ -488,8 +490,8 @@ bool transportDataAvailable(void)
 
 uint8_t readMessage(void *data)
 {
-    memcpy(data, _data, _inStateMachine._recLen);
+    memcpy(data, _data, _pacLength);
     _inStateMachine._packet_received = false;
-    return _inStateMachine._recLen;
+    return _pacLength;
 }
 #endif //RS485_H
