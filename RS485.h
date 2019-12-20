@@ -325,7 +325,7 @@ _serialProcessEndWithPackError:
 }
 
 // TODO: store stuff into uint16_t to save space?
-bool _writeRS485Packet(const void *data, const uint8_t len)
+inline bool _writeRS485Packet(const void *data, const uint8_t len)
 {
     assertDE();
 # 	if defined(RS485_COLLISION_DETECTION)
@@ -397,7 +397,7 @@ bool _writeRS485Packet(const void *data, const uint8_t len)
 
 // TODO Will the watchdog trigger before?
 
-bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
+inline bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
 {
     (void) to;  // unused in RS485
 
@@ -461,7 +461,7 @@ bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
     #endif 
 
 
-bool initRadio(void)
+inline bool initRadio(void)
 {
     _serialReset();
     MY_RS485_DE_DDR |= _BV(MY_RS485_DE_PIN);
@@ -482,13 +482,13 @@ bool initRadio(void)
     return true;
 }
 
-bool transportDataAvailable(void)
+inline bool transportDataAvailable(void)
 {
     _serialProcess();
     return _inStateMachine._packet_received;
 }
 
-uint8_t readMessage(void *data)
+inline uint8_t readMessage(void *data)
 {
     memcpy(data, _data, _pacLength);
     _inStateMachine._packet_received = false;
