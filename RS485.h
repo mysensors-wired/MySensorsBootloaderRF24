@@ -55,6 +55,7 @@
 #include <util/delay.h>
 #include <avr/io.h>
 #include <util/setbaud.h>
+#include <util/crc16.h>
 
 #if defined(MY_RS485_DE_PIN)
 #if !defined(MY_RS485_DE_INVERSE)
@@ -83,28 +84,24 @@ extern nodeConfig_t _eepromNodeConfig;
 
 // Receiving header information
 #define RS485_HEADER_LENGTH  4
-char _header[RS485_HEADER_LENGTH];
+uint8_t _header[RS485_HEADER_LENGTH ];
 
 // Reception state machine control and storage variables
-unsigned char _recPhase;
-unsigned char _recPos;
-static unsigned char _recLen;
-unsigned char _recCS;
-unsigned char _recCalcCS;
+struct {
+    uint8_t _recPhase;
+    uint8_t _recPos;
+    uint8_t _recLen;
+    uint8_t _recCRC;
+    uint8_t _recCalcCRC;
+    bool _packet_received;
+} _inStateMachine ;
 
-unsigned char _nodeId;
-unsigned char _hasNodeId = false;
-
+uint8_t _pacLength;
 char _data[MY_RS485_MAX_MESSAGE_LENGTH];
-uint8_t _packet_len;
-unsigned char _packet_from;
-bool _packet_received;
 
 // Packet wrapping characters, defined in standard ASCII table
 #define SOH 1
 #define STX 2
-
-
 
 // CAN Transceiver related stuff
 // it is possible to use any digial I/O (or the USART)
@@ -128,8 +125,6 @@ bool _packet_received;
 #error " TCNT2_VAL_PER_BIT is undefined! "
 #endif
 
-
-uint8_t canTcnt2ValBitStart;  // TCNT2 counter value at the beginning of a bit transaction
 typedef enum {
     UART_START_VAL = 0,
     UART_STOP_VAL = 1
@@ -145,10 +140,12 @@ bool putBitReadback(bool b)
 // check the current state of the CAN bus
 // if a dominant level is set on the CAN bus check if this node caused this in a previous transaction
     uint8_t rxVal;
-    rxVal = (PIND & _BV(CAN_RX_PIN)) >> CAN_RX_PIN;
-
     uint8_t txVal;
+
+    rxVal = (PIND & _BV(CAN_RX_PIN)) >> CAN_RX_PIN;
     txVal = (PIND & _BV(CAN_TX_PIN)) >> CAN_TX_PIN;
+
+    while(!(TIFR2 & _BV(OCF2A)))	//wait for timer overflow
 
     if (rxVal == CAN_DOMINANT_LEVEL && txVal != CAN_DOMINANT_LEVEL)
         return false; // some other node is sending a dominant bit
@@ -170,10 +167,10 @@ bool putBitReadback(bool b)
     // One clock cycle at 8 MHz is 150 ns.
     // --> The rx signal should 'immediately' be stable after TX pin has been set
 	// Better be on the safe side and insert one NOP
-	asm("NOP");
+	_delay_us(1);
 
     // ensure that the bit is set for 1/BAUD_RATE time
-    while ((uint8_t)(TCNT2 - canTcnt2ValBitStart) < TCNT2_VAL_PER_BIT)
+    while(!(TIFR2 & _BV(OCF2B)))
     {
         // check the output while waiting.
         // Do collisions occur, while a logical 1 (CAN recessive bit) is being transmitted?
@@ -185,7 +182,7 @@ bool putBitReadback(bool b)
     }
 
     // increase start value for next bit to transfer
-    canTcnt2ValBitStart += TCNT2_VAL_PER_BIT;
+    TIFR2 = _BV(OCF2A) | _BV(OCF2B);
 
     return true;
 }
@@ -194,21 +191,12 @@ bool putBitReadback(bool b)
 
 bool putchReadback(uint8_t val)
 {
-    UART_SRB = 0; // disable USART interface
-
-// TODO: is this BS with extra CAN RX/TX defines?
-    DDRD &= ~_BV(CAN_RX_PIN); // configure RX as input
-
-    PORTD |= _BV(CAN_TX_PIN); // 1 is the CAN recessive state
-    DDRD |= _BV(CAN_TX_PIN);  // configure TX as output
-
-
-    canTcnt2ValBitStart = TCNT2; // set variable to determine next bit time window
+    TCNT2 = OCF2B;				//reset timer
+	TIFR2 = _BV(OCF2A);		//clear all overflow bits
 
     // send Start Bit
     if (!putBitReadback(UART_START_VAL))
     {
-        UART_SRB = _BV(RXEN0) | _BV(TXEN0);  // re-enable USART
         return false;
     }
 
@@ -216,9 +204,8 @@ bool putchReadback(uint8_t val)
     // send payload
     for (uint8_t i = 0; i < 8; ++i)
     {
-        if (!putBitReadback((val & (1 << i)) >> i))
+        if (!putBitReadback(val & (1 << i)))
         {
-            UART_SRB = _BV(RXEN0) | _BV(TXEN0);  // re-enable USART
             return false;
         }
     }
@@ -226,12 +213,8 @@ bool putchReadback(uint8_t val)
     // send Stop Bit
     if (!putBitReadback(UART_STOP_VAL))
     {
-        UART_SRB = _BV(RXEN0) | _BV(TXEN0);  // re-enable USART
         return false;
     }
-
-
-    UART_SRB = _BV(RXEN0) | _BV(TXEN0);   // re-enable USART
     return true;
 }
 
@@ -255,11 +238,11 @@ inline bool uart_putc(const uint8_t ch) {
 //Reset the state machine and release the data pointer
 void _serialReset()
 {
-    _recPhase = 0;
-    _recPos = 0;
-    _recLen = 0;
-    _recCS = 0;
-    _recCalcCS = 0;
+    _inStateMachine._recPhase = 0;
+    _inStateMachine._recPos = 0;
+    _inStateMachine._recLen = 0;
+    _inStateMachine._recCRC = 0;
+  //  _inStateMachine._recCalcCRC = 0;  // will be set zo 0 in _serialProcess()
 }
 
 // This is the main reception state machine.  Progress through the states
@@ -278,11 +261,12 @@ bool _serialProcess()
     while ((UCSR0A & (1 << RXC0))) // input buffer not empty
     {
         char inch;
+        //_header[RS485_HEADER_LENGTH] = uart_getc();
         inch = uart_getc();
-        if (_packet_received == true){
+        if (_inStateMachine._packet_received == true){
 			return true;
 		}
-        switch(_recPhase) {
+        switch(_inStateMachine._recPhase) {
 
             // Case 0 looks for the header.  Bytes arrive in the serial interface and get
             // shifted through a header buffer.  When the start and end characters in
@@ -292,22 +276,19 @@ bool _serialProcess()
                 memcpy(&_header[0],&_header[1],RS485_HEADER_LENGTH-1);
                 _header[RS485_HEADER_LENGTH-1] = inch;
                 if ((_header[0] == SOH) && (_header[3] == STX)) {	
-                    _recCS = _header[1];
-                    _recLen = _header[2];
-                    _recCalcCS = _recLen;
-                    _recPhase = 1;
-                    _recPos = 0;
+                    _inStateMachine._recCRC = _header[1];
+                    _inStateMachine._recLen = _header[2];
+                    _inStateMachine._recCalcCRC = _crc_ibutton_update(0,_inStateMachine._recLen);
+                    _inStateMachine._recPhase = 1;
+                    _inStateMachine._recPos = 0;
 
                     //Avoid _data[] overflow
-                    if (_recLen >= MY_RS485_MAX_MESSAGE_LENGTH) {
-                        _serialReset();
-                        break;
+                    if (_inStateMachine._recLen >= MY_RS485_MAX_MESSAGE_LENGTH) {
+                        goto _serialProcessEndWithPackError;
                     }
                     
-                    if (_recLen == 0) {
-                        _serialReset();
-                        //_recPhase = 2; // what now?
-                        break;
+                    if (_inStateMachine._recLen == 0) {
+                        goto _serialProcessEndWithPackError;
                     }
                 }
                 break;
@@ -315,76 +296,92 @@ bool _serialProcess()
             // Case 1 receives the data portion of the packet.  Read in "_recLen" number
             // of bytes and store them in the _data array.
             case 1:
-                _data[_recPos++] = inch;
-                _recCalcCS += inch;
-                if (_recPos == _recLen) {
-                    _recPhase = 2;
+                _data[_inStateMachine._recPos++] = inch;
+                _inStateMachine._recCalcCRC = _crc_ibutton_update(_inStateMachine._recCalcCRC,inch);
+                if (_inStateMachine._recPos == _inStateMachine._recLen) {
+                    _inStateMachine._recPhase = 2;
                 }
                 else{
                     break;
                 }
 
+            // Case 2 checks CS and marks the message as recieved
             case 2:
-                if (_recCS == _recCalcCS) {
-                    //Check if we should process this message
-                    //We reject the message if we are the sender
-                    //Message not surpressed if node ID was not assigned to support auto id
-                //	if ((_data[0] == _nodeId) && (_hasNodeId == true)) {
-                //		_serialReset();
-                //		break;
-                //	}
-                    _packet_len = _recLen;
-                    _packet_received = true;
+                if (_inStateMachine._recCRC == _inStateMachine._recCalcCRC) {
+                    _inStateMachine._packet_received = true;
+                    _pacLength = _inStateMachine._recLen;
                 }
-                //Clear the data
-                _serialReset();
-                //Return true, we have processed one command
-                return true;
-                break;
+                goto _serialProcessEndWithPackError;
             }
         }
 	return true;
-}
 
-// TODO: store stuff into uint16_t to save space?
-bool writeRS485Packet(const void *data, const uint8_t len)
-{
-    unsigned char cs = len;
-    char *datap = (char *)data;
-
-    for(uint8_t i=0; i<len; i++) {
-		cs += datap[i];
-	}
-
-    // Start of header by writing SOH
-    if(!uart_putc(SOH))
-        return false;
-
-     if(!uart_putc(cs)) // checksum
-        return false;
-
-    if(!uart_putc(len)) // Length of text
-        return false;
-    
-    if(!uart_putc(STX)) //Start of text
-        return false;
-
-    for (uint8_t i = 0; i < len; i++)
-    {
-        if(!uart_putc(datap[i])) // Text bytes
-            return false;
-    }
-
-// flush HW USART
-#if !defined(RS485_COLLISION_DETECTION)
-    UCSR0A |= 1<<TXC0;  // clear flag!
-    while((UCSR0A & _BV(TXC0)) == 0); //wait for transission complete
-#endif
-
+_serialProcessEndWithPackError:
+    //Clear the data
+    _serialReset();
+    //Return true, we have processed one command
     return true;
 }
 
+// TODO: store stuff into uint16_t to save space?
+inline bool _writeRS485Packet(const void *data, const uint8_t len)
+{
+    assertDE();
+# 	if defined(RS485_COLLISION_DETECTION)
+    UART_SRB = 0; // disable USART interface
 
+// TODO: is this BS with extra CAN RX/TX defines?
+    DDRD &= ~_BV(CAN_RX_PIN); // configure RX as input
+    PORTD |= _BV(CAN_TX_PIN); // 1 is the CAN recessive state
+    DDRD |= _BV(CAN_TX_PIN);  // configure TX as output
+#   endif
+
+    unsigned char crc = _crc_ibutton_update(0,len);
+    char *datap = (char *)data;
+    uint8_t i;
+
+    for(uint8_t i=0; i<len; i++) {
+		crc = _crc_ibutton_update(crc,datap[i]);
+	}
+    // Start of header by writing SOH
+    if(!uart_putc(SOH))
+        goto _writeRS485PacketError;
+
+     if(!uart_putc(crc)) // checksum
+        goto _writeRS485PacketError;
+
+    if(!uart_putc(len)) // Length of text
+        goto _writeRS485PacketError;
+    
+    if(!uart_putc(STX)) //Start of text
+        goto _writeRS485PacketError;
+
+    for (i = 0; i < len; i++)
+    {
+        if(!uart_putc(datap[i])) // Text bytes
+            goto _writeRS485PacketError;
+    }
+
+# 	if defined(RS485_COLLISION_DETECTION)
+    UART_SRB = _BV(RXEN0) | _BV(TXEN0);   // re-enable USART
+#   else
+    UCSR0A |= 1<<TXC0;  // clear flag!
+    while((UCSR0A & _BV(TXC0)) == 0); //wait for transission complete
+#	endif
+    deassertDE();
+
+    return true;
+
+    _writeRS485PacketError:
+    # 	if defined(RS485_COLLISION_DETECTION)
+    UART_SRB = _BV(RXEN0) | _BV(TXEN0);   // re-enable USART
+#   else
+    UCSR0A |= 1<<TXC0;  // clear flag!
+    while((UCSR0A & _BV(TXC0)) == 0); //wait for transission complete
+#	endif
+    deassertDE();
+    return false;
+}
 
 #define RS485_SEND_MESSAGE_TRY_CNT 10
 #define RS485_BUS_AQUISITION_TRY_CNT 50
@@ -399,7 +396,7 @@ bool writeRS485Packet(const void *data, const uint8_t len)
 
 // TODO Will the watchdog trigger before?
 
-bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
+inline bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
 {
     (void) to;  // unused in RS485
 
@@ -429,14 +426,13 @@ bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
                 // bus seems idle
                 // try to send bitwise for RS485_TRANSMIT_TRY_CNT times
 
-                assertDE();
-                bool ret = writeRS485Packet(data, len);
-                deassertDE();
+                bool ret = _writeRS485Packet(data, len);
+                
                 if ( ret )
                 {
                     // message has been successfully sent :)
 
-                    LED_PORT &= ~_BV(LED_PIN); // disable LED
+                   // LED_PORT &= ~_BV(LED_PIN); // disable LED
                     return true;
                 }
 
@@ -454,37 +450,47 @@ bool writeMessage(const uint8_t to, const void *data, const uint8_t len)
     return false;
 }
 
-bool initRadio(void)
+    // Start bit would be too long
+    // it will take some clock cycles until the start bit is actually written to the bus 
+    // anticipate this delay by subtracting some cnt values
+    #ifdef USE_PRESCALER_8X
+        #define BIT_SETUP_TIME 50/8
+    #else
+        #define BIT_SETUP_TIME 50
+    #endif 
+
+
+inline bool initRadio(void)
 {
     _serialReset();
     MY_RS485_DE_DDR |= _BV(MY_RS485_DE_PIN);
-    deassertDE();
-
+//    deassertDE();
 #ifdef RS485_COLLISION_DETECTION
     // activate timer CNT2 to send bits in equidistant time slices
 
-    PRR &= _BV(PRTIM2); // ensure that Timer2 is enabled in PRR (Power Reduction Register)
-
+//    PRR &= _BV(PRTIM2); // ensure that Timer2 is enabled in PRR (Power Reduction Register) // save some space
+    TCCR2A = _BV(WGM21); // set to CTC mode
 #ifdef USE_PRESCALER_8X
     TCCR2B = _BV(CS21); // set clkTS2 with prescaling factor of /8
 #else
     TCCR2B = _BV(CS20); // set clkTS2 source to non prescaling
 #endif
+	OCR2A = TCNT2_VAL_PER_BIT;
+	OCR2B = TCNT2_VAL_PER_BIT - BIT_SETUP_TIME ;
 #endif
-
     return true;
 }
 
-bool transportDataAvailable(void)
+inline bool transportDataAvailable(void)
 {
     _serialProcess();
-    return _packet_received;
+    return _inStateMachine._packet_received;
 }
 
-uint8_t readMessage(void *data)
+inline uint8_t readMessage(void *data)
 {
-    memcpy(data, _data, _packet_len);
-    _packet_received = false;
-    return _packet_len;
+    memcpy(data, _data, _pacLength);
+    _inStateMachine._packet_received = false;
+    return _pacLength;
 }
 #endif //RS485_H
