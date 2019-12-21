@@ -55,6 +55,7 @@
 #include <util/delay.h>
 #include <avr/io.h>
 #include <util/setbaud.h>
+#include <util/crc16.h>
 
 #if defined(MY_RS485_DE_PIN)
 #if !defined(MY_RS485_DE_INVERSE)
@@ -90,8 +91,8 @@ struct {
     uint8_t _recPhase;
     uint8_t _recPos;
     uint8_t _recLen;
-    uint8_t _recCS;
-    uint8_t _recCalcCS;
+    uint8_t _recCRC;
+    uint8_t _recCalcCRC;
     bool _packet_received;
 } _inStateMachine ;
 
@@ -101,8 +102,6 @@ char _data[MY_RS485_MAX_MESSAGE_LENGTH];
 // Packet wrapping characters, defined in standard ASCII table
 #define SOH 1
 #define STX 2
-
-
 
 // CAN Transceiver related stuff
 // it is possible to use any digial I/O (or the USART)
@@ -242,8 +241,8 @@ void _serialReset()
     _inStateMachine._recPhase = 0;
     _inStateMachine._recPos = 0;
     _inStateMachine._recLen = 0;
-    _inStateMachine._recCS = 0;
-    _inStateMachine._recCalcCS = 0;
+    _inStateMachine._recCRC = 0;
+  //  _inStateMachine._recCalcCRC = 0;  // will be set zo 0 in _serialProcess()
 }
 
 // This is the main reception state machine.  Progress through the states
@@ -277,9 +276,9 @@ bool _serialProcess()
                 memcpy(&_header[0],&_header[1],RS485_HEADER_LENGTH-1);
                 _header[RS485_HEADER_LENGTH-1] = inch;
                 if ((_header[0] == SOH) && (_header[3] == STX)) {	
-                    _inStateMachine._recCS = _header[1];
+                    _inStateMachine._recCRC = _header[1];
                     _inStateMachine._recLen = _header[2];
-                    _inStateMachine._recCalcCS = _inStateMachine._recLen;
+                    _inStateMachine._recCalcCRC = _crc_ibutton_update(0,_inStateMachine._recLen);
                     _inStateMachine._recPhase = 1;
                     _inStateMachine._recPos = 0;
 
@@ -298,7 +297,7 @@ bool _serialProcess()
             // of bytes and store them in the _data array.
             case 1:
                 _data[_inStateMachine._recPos++] = inch;
-                _inStateMachine._recCalcCS += inch;
+                _inStateMachine._recCalcCRC = _crc_ibutton_update(_inStateMachine._recCalcCRC,inch);
                 if (_inStateMachine._recPos == _inStateMachine._recLen) {
                     _inStateMachine._recPhase = 2;
                 }
@@ -308,7 +307,7 @@ bool _serialProcess()
 
             // Case 2 checks CS and marks the message as recieved
             case 2:
-                if (_inStateMachine._recCS == _inStateMachine._recCalcCS) {
+                if (_inStateMachine._recCRC == _inStateMachine._recCalcCRC) {
                     _inStateMachine._packet_received = true;
                     _pacLength = _inStateMachine._recLen;
                 }
@@ -337,18 +336,18 @@ inline bool _writeRS485Packet(const void *data, const uint8_t len)
     DDRD |= _BV(CAN_TX_PIN);  // configure TX as output
 #   endif
 
-    unsigned char cs = len;
+    unsigned char crc = _crc_ibutton_update(0,len);
     char *datap = (char *)data;
     uint8_t i;
 
     for(uint8_t i=0; i<len; i++) {
-		cs += datap[i];
+		crc = _crc_ibutton_update(crc,datap[i]);
 	}
     // Start of header by writing SOH
     if(!uart_putc(SOH))
         goto _writeRS485PacketError;
 
-     if(!uart_putc(cs)) // checksum
+     if(!uart_putc(crc)) // checksum
         goto _writeRS485PacketError;
 
     if(!uart_putc(len)) // Length of text
