@@ -100,8 +100,8 @@ uint8_t _pacLength;
 char _data[MY_RS485_MAX_MESSAGE_LENGTH];
 
 // Packet wrapping characters, defined in standard ASCII table
-#define SOH 1
-#define STX 2
+#define SOH 0x10        // Lower nibble can be used for message priorities (future)
+#define STX 0x20
 
 // CAN Transceiver related stuff
 // it is possible to use any digial I/O (or the USART)
@@ -275,7 +275,7 @@ bool _serialProcess()
             case 0:
                 memcpy(&_header[0],&_header[1],RS485_HEADER_LENGTH-1);
                 _header[RS485_HEADER_LENGTH-1] = inch;
-                if ((_header[0] == SOH) && (_header[3] == STX)) {	
+                if (((_header[0] & 0xF0) == SOH) && (_header[3] == STX)) {	
                     _inStateMachine._recCRC = _header[1];
                     _inStateMachine._recLen = _header[2];
                     _inStateMachine._recCalcCRC = _crc_ibutton_update(0,_inStateMachine._recLen);
