@@ -6,11 +6,15 @@
 #define HardwareID_H
 
 #define RS_NODE_BASE_ID 0x01 << 5
+#define RELAY_MODULE_BASE_ID 0x02 << 5
 
 int8_t readHardwareIDtoEEPROM(){
     uint8_t id = 0;
 
     #ifdef RSNode_V1_0
+    #define MY_RS485_DE_PIN PIND3
+    #define MY_RS485_DE_PORT PORTD
+    #define MY_RS485_DE_DDR DDRD
     /*  IO PINs
     PC2 = ID0
     PC3 = ID1
@@ -29,6 +33,22 @@ int8_t readHardwareIDtoEEPROM(){
         id = RS_NODE_BASE_ID | (0x0F & (  ~(  (PINC & (_BV(PC2) | _BV(PC3) | _BV(PC4) | _BV(PC5) ) ) >> 2))); 
     #else
         id = 0x0F & (  ~(  (PINC & (_BV(PC2) | _BV(PC3) | _BV(PC4) | _BV(PC5) ) ) >> 2)); 
+    #endif
+
+    #elif defined RELAY_BOARD_V1_0
+    #define MY_RS485_DE_PIN PINE3
+    #define MY_RS485_DE_PORT PORTE
+    #define MY_RS485_DE_DDR DDRE
+    /* IO Pins
+    PD4 = ID0
+    PD5 = ID1
+    PD6 = ID2
+    PD7 = ID3
+    */
+    #ifdef RELAY_MODULE_BASE_ID
+        id = RS_NODE_BASE_ID | (0x0F & (  ~(  (PIND & (0xF0)) >> 4))); 
+    #else
+        id = 0x0F & (  ~(  (PIND & 0xF0 ) >> 4)); 
     #endif
 
     #else
