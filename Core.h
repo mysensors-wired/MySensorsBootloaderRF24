@@ -40,20 +40,20 @@
 #include <stdlib.h>
 #include <avr/eeprom.h>
 #include <util/delay.h>
-
 #include "Definitions.h"
 #include "boot.h"
 #include "HW.h"
 #include "MyEepromAddresses.h"
 #include "MyMessage.h"
 #ifdef MY_RADIO_RS485
+#include "HardwareID.h"
 #include "RS485.h"
 #else
 #include "RF24.h"
 #include "STK500Bootloader.h"
 #endif
 #include "MySensorsBootloader.h"
-#include "HardwareID.h"
+
 
 
 // global variables

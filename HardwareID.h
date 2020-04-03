@@ -5,6 +5,10 @@
 #ifndef HardwareID_H
 #define HardwareID_H
 
+#define BROADCAST_ADDRESS	(0xFFu)
+#define GATEWAY_ADDRESS		(0x00u)
+#include <avr/io.h>
+
 #define RS_NODE_BASE_ID 0x01 << 5
 #define RELAY_MODULE_BASE_ID 0x02 << 5
 
@@ -45,12 +49,15 @@ int8_t readHardwareIDtoEEPROM(){
     PD6 = ID2
     PD7 = ID3
     */
+    DDRD = DDRD & 0xF0; //make sure ID pins are inputs
+    PORTD = PORTD | 0x0F; //enable ID pin pullups
+
     #ifdef RELAY_MODULE_BASE_ID
-        id = RS_NODE_BASE_ID | (0x0F & (  ~(  (PIND & (0xF0)) >> 4))); 
+        id = RELAY_MODULE_BASE_ID | (0x0F & (  ~(  (PIND & (0xF0)) >> 4))); 
     #else
         id = 0x0F & (  ~(  (PIND & 0xF0 ) >> 4)); 
     #endif
-
+    PORTD = PORTD & 0xF0; //disable ID pin pullups
     #else
     #warning "No valid HW-Platform"
     return -2;
