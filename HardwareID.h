@@ -9,8 +9,9 @@
 #define GATEWAY_ADDRESS		(0x00u)
 #include <avr/io.h>
 
-#define RS_NODE_BASE_ID 0x01 << 5
-#define RELAY_MODULE_BASE_ID 0x02 << 5
+#define RS_NODE_BASE_ID 32
+#define RELAY_MODULE_BASE_ID 64
+#define WALLNODE_BASE_ID    96
 
 int8_t readHardwareIDtoEEPROM(){
     uint8_t id = 0;
@@ -58,6 +59,32 @@ int8_t readHardwareIDtoEEPROM(){
         id = 0x0F & (  ~(  (PIND & 0xF0 ) >> 4)); 
     #endif
     PORTD = PORTD & 0xF0; //disable ID pin pullups
+
+    #elif defined RELAY_WALLNODE_V1_0
+    #define MY_RS485_DE_PIN PINC1
+    #define MY_RS485_DE_PORT PORTC
+    #define MY_RS485_DE_DDR DDRC
+
+    /* IO Pins
+    PD3 = ID4
+    PD4 = ID3
+    PD5 = ID2
+    PD6 = ID1
+    PD7 = ID0
+    */
+    DDRD = DDRD & 0b11100000; //make sure ID pins are inputs
+    PORTD = PORTD | 0b00011111; //enable ID pin pullups
+    
+
+    #ifdef WALLNODE_BASE_ID
+        id = WALLNODE_BASE_ID | (0b00011111 & (  ~(  (PIND & (0b11111000)) >> 3))); 
+    #else
+        id = 0b00011111 & (  ~(  (PIND & 0b11111000 ) >> 3)); 
+    #endif
+    PORTD = PORTD & ~0b11111000; //disable ID pin pullups
+
+
+
     #else
     #warning "No valid HW-Platform"
     return -2;
