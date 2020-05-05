@@ -9,9 +9,10 @@
 #define GATEWAY_ADDRESS		(0x00u)
 #include <avr/io.h>
 
-#define RS_NODE_BASE_ID 32
-#define RELAY_MODULE_BASE_ID 64
-#define WALLNODE_BASE_ID    96
+#define RS_NODE_BASE_ID         32
+#define RELAY_MODULE_BASE_ID    64
+#define FREE_BASE_ID            80
+#define WALLNODE_BASE_ID        96
 
 int8_t readHardwareIDtoEEPROM(){
     uint8_t id = 0;
@@ -50,15 +51,17 @@ int8_t readHardwareIDtoEEPROM(){
     PD6 = ID2
     PD7 = ID3
     */
-    DDRD = DDRD & 0xF0; //make sure ID pins are inputs
-    PORTD = PORTD | 0x0F; //enable ID pin pullups
+    const uint8_t INPUT_BIT_MASK = 0xF0;
+    DDRD = DDRD & ~INPUT_BIT_MASK; //make sure ID pins are inputs
+    PORTD = PORTD | INPUT_BIT_MASK; //enable ID pin pullups
+    _delay_us(50);  // wait vor inputs stable
 
     #ifdef RELAY_MODULE_BASE_ID
-        id = RELAY_MODULE_BASE_ID | (0x0F & (  ~(  (PIND & (0xF0)) >> 4))); 
+        id = RELAY_MODULE_BASE_ID | (~INPUT_BIT_MASK & (  ~(  (PIND & (INPUT_BIT_MASK)) >> 4))); 
     #else
-        id = 0x0F & (  ~(  (PIND & 0xF0 ) >> 4)); 
+        id = ~INPUT_BIT_MASK & (  ~(  (PIND & INPUT_BIT_MASK) >> 4)); 
     #endif
-    PORTD = PORTD & 0xF0; //disable ID pin pullups
+    PORTD = PORTD & ~INPUT_BIT_MASK; //disable ID pin pullups
 
     #elif defined RELAY_WALLNODE_V1_0
     #define MY_RS485_DE_PIN PINC1
@@ -72,17 +75,17 @@ int8_t readHardwareIDtoEEPROM(){
     PD6 = ID1
     PD7 = ID0
     */
-    DDRD = DDRD & 0b11100000; //make sure ID pins are inputs
-    PORTD = PORTD | 0b00011111; //enable ID pin pullups
-    
+   const uint8_t INPUT_BIT_MASK = 0xF8;
+    DDRD = DDRD & ~INPUT_BIT_MASK; //make sure ID pins are inputs
+    PORTD = PORTD | INPUT_BIT_MASK; //enable ID pin pullups
+    _delay_us(50);  // wait vor inputs stable
 
     #ifdef WALLNODE_BASE_ID
-        id = WALLNODE_BASE_ID | (0b00011111 & (  ~(  (PIND & (0b11111000)) >> 3))); 
+        id = WALLNODE_BASE_ID | (~INPUT_BIT_MASK & (  ~(  (PIND & (INPUT_BIT_MASK)) >> 3))); 
     #else
-        id = 0b00011111 & (  ~(  (PIND & 0b11111000 ) >> 3)); 
+        id = ~INPUT_BIT_MASK & (  ~(  (PIND & INPUT_BIT_MASK) >> 3)); 
     #endif
-    PORTD = PORTD & ~0b11111000; //disable ID pin pullups
-
+    PORTD = PORTD & ~INPUT_BIT_MASK; //disable ID pin pullups
 
 
     #else
