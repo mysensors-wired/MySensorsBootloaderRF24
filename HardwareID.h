@@ -81,9 +81,9 @@ int8_t readHardwareIDtoEEPROM(){
     _delay_us(50);  // wait vor inputs stable
 
     #ifdef WALLNODE_BASE_ID
-        id = WALLNODE_BASE_ID | (~INPUT_BIT_MASK & (  ~(  (PIND & (INPUT_BIT_MASK)) >> 3))); 
+        id = WALLNODE_BASE_ID | (  (INPUT_BIT_MASK >> 3) & (~( PIND & (INPUT_BIT_MASK) )>> 3)); 
     #else
-        id = ~INPUT_BIT_MASK & (  ~(  (PIND & INPUT_BIT_MASK) >> 3)); 
+        id =( INPUT_BIT_MASK >> 3) & (~( PIND & (INPUT_BIT_MASK) )>> 3); 
     #endif
     PORTD = PORTD & ~INPUT_BIT_MASK; //disable ID pin pullups
 
