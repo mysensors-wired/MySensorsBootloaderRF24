@@ -18,6 +18,8 @@ int8_t readHardwareIDtoEEPROM(){
     uint8_t id = 0;
 
     #ifdef RSNode_V1_0
+    /*   ######### BEGIN Roller Shutter Node  */
+    #define MY_RS485_DE_INVERSE
     #define MY_RS485_DE_PIN PIND3
     #define MY_RS485_DE_PORT PORTD
     #define MY_RS485_DE_DDR DDRD
@@ -40,8 +42,12 @@ int8_t readHardwareIDtoEEPROM(){
     #else
         id = 0x0F & (  ~(  (PINC & (_BV(PC2) | _BV(PC3) | _BV(PC4) | _BV(PC5) ) ) >> 2)); 
     #endif
+    /*   ######### END Roller Shutter Node  */
 
-    #elif defined RELAY_BOARD_V1_0
+
+   #elif defined RELAY_BOARD_V1_0 || defined RELAY_BOARD_V2_0
+   /*   ######### BEGIN Relay board */
+    #define MY_RS485_DE_INVERSE 
     #define MY_RS485_DE_PIN PINE3
     #define MY_RS485_DE_PORT PORTE
     #define MY_RS485_DE_DDR DDRE
@@ -62,8 +68,13 @@ int8_t readHardwareIDtoEEPROM(){
         id = ~INPUT_BIT_MASK & (  ~(  (PIND & INPUT_BIT_MASK) >> 4)); 
     #endif
     PORTD = PORTD & ~INPUT_BIT_MASK; //disable ID pin pullups
+    /*   ######### END Relay board */ 
+
+
 
     #elif defined RELAY_WALLNODE_V1_0
+     /*   ######### BEGIN Wallnode board */ 
+    #define MY_RS485_DE_INVERSE
     #define MY_RS485_DE_PIN PINC1
     #define MY_RS485_DE_PORT PORTC
     #define MY_RS485_DE_DDR DDRC
@@ -86,6 +97,9 @@ int8_t readHardwareIDtoEEPROM(){
         id =( INPUT_BIT_MASK >> 3) & (~( PIND & (INPUT_BIT_MASK) )>> 3); 
     #endif
     PORTD = PORTD & ~INPUT_BIT_MASK; //disable ID pin pullups
+     /*   ######### END Wallnode board */ 
+
+
 
 
     #else
