@@ -89,7 +89,7 @@ int8_t readHardwareIDtoEEPROM(){
    const uint8_t INPUT_BIT_MASK = 0xF8;
     DDRD = DDRD & ~INPUT_BIT_MASK; //make sure ID pins are inputs
     PORTD = PORTD | INPUT_BIT_MASK; //enable ID pin pullups
-    _delay_us(50);  // wait vor inputs stable
+    _delay_us(50);  // wait for inputs stable
 
     #ifdef WALLNODE_BASE_ID
         id = WALLNODE_BASE_ID | (  (INPUT_BIT_MASK >> 3) & (~( PIND & (INPUT_BIT_MASK) )>> 3)); 
@@ -113,7 +113,7 @@ int8_t readHardwareIDtoEEPROM(){
 
 
     eeprom_update_byte(EEPROM_NODE_ID_ADDRESS, id);
-
+    do {} while (!eeprom_is_ready());
     return 0;
 }
 

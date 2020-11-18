@@ -256,6 +256,7 @@ static void MySensorsBootloader(void) {
 						// cmd 0x01 clear eeprom
 						if(firmwareConfigResponse->type_command.bl_command == BL_CMD_CLEAR_EEPROM) {
 							for(uint16_t i = 0; i < EEPROM_SIZE; i++) eeprom_update_byte((uint8_t *)i, EEPROM_ERASED_BYTE);
+							readHardwareIDtoEEPROM(); // update id
 						} 
 						else { 
 							// cmd 0x02 set id
